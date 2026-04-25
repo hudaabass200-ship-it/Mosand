@@ -17,14 +17,28 @@ if (!apiKey) {
 
 const ai = apiKey ? new GoogleGenAI({ apiKey: apiKey }) : null as any;
 
-export async function rephraseToAcademic(text: string): Promise<string> {
+export async function rephraseToAcademic(text: string, language: 'ar' | 'en' = 'ar', focus: string = ''): Promise<string> {
   if (!ai) return "خطأ: مفتاح GEMINI_API_KEY غير متوفر. يرجى التحقق من إعدادات المفتاح.";
   if (!text.trim()) return "";
+
+  let promptLang = language === 'ar' ? 
+    `أعد صياغة وتلخيص النص التالي بلغة عربية أكاديمية وعلمية واحترافية مناسبة لمشروع تخرج أو تقرير تدريب رسمي. تأكد من أن النبرة موضوعية ودقيقة وراقية. استخدم مصطلحات أكاديمية احترافية.` : 
+    `Rephrase and summarize the following text into a professional, academic, and scientific English format suitable for a graduation project or a formal internship report. Ensure the tone is objective, precise, and sophisticated. Use professional academic terminology.`;
+
+  if (focus.trim()) {
+      promptLang += language === 'ar' ? 
+        `\n\nتعليمات هامة: ركز بشكل خاص على تلخيص وصياغة هذا الجزء أو الفكرة: "${focus}".` :
+        `\n\nImportant Instructions: Focus specifically on summarizing and rephrasing this part or idea: "${focus}".`;
+  }
+  
+  promptLang += language === 'ar' ?
+    `\n\nملاحظة هامة جداً: قدم النص النهائي كنقاط أو فقرات احترافية نظيفة. **لا تستخدم أبداً** علامات التنسيق مثل النجمات (*** أو **) أو علامات المربع (###) أو أي تنسيقات Markdown أخرى.` :
+    `\n\nVERY IMPORTANT: Provide the final text as clean, professional paragraphs or bullet points. **NEVER use** markdown formatting such as asterisks (*** or **) or hash/pound signs (###). Output pure text.`;
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Rephrase the following text into a professional, academic, and scientific format suitable for a graduation project or a formal internship report. Ensure the tone is objective, precise, and sophisticated. Use professional academic terminology.
+      contents: `${promptLang}
       
       Input text: "${text}"`,
     });

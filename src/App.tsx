@@ -13,15 +13,43 @@ import {
   Palette,
   Type,
   ChevronRight,
-  Image as ImageIcon,
-  UploadCloud
+  ImageIcon,
+  UploadCloud,
+  Clock, // Added Clock
+  Trash2 // Added Trash2
 } from 'lucide-react';
 import { rephraseToAcademic, getDesignSuggestions, analyzeSlide } from './services/geminiService';
 
 // --- Types ---
-type AppMode = 'home' | 'writer' | 'pptdesign' | 'slidereview' | 'structure';
+type AppMode = 'home' | 'writer' | 'pptdesign' | 'slidereview' | 'structure' | 'history';
 
 // --- Navigation ---
+export interface HistoryItem {
+  id: string;
+  date: number;
+  tool: string;
+  title: string;
+  inputPayload: any;
+  outputResult: string;
+}
+
+export function saveToHistory(item: Omit<HistoryItem, 'id' | 'date'>) {
+  try {
+    const saved = localStorage.getItem('gradmaster_history');
+    let history: HistoryItem[] = saved ? JSON.parse(saved) : [];
+    history.unshift({
+      ...item,
+      id: Math.random().toString(36).substring(2, 9),
+      date: Date.now(),
+    });
+    // Keep last 50 items
+    if (history.length > 50) history = history.slice(0, 50);
+    localStorage.setItem('gradmaster_history', JSON.stringify(history));
+  } catch (e) {
+    console.error('Failed to save to history', e);
+  }
+}
+
 const NAV_ITEMS = [
   { id: 'writer', label: 'الصياغة الأكاديمية', icon: Sparkles },
   { id: 'pptdesign', label: 'تصميم العروض', icon: Presentation },
@@ -61,9 +89,18 @@ export default function App() {
             ))}
           </nav>
 
-          <button className="bg-stone-800 text-stone-50 px-5 py-2 rounded-full text-sm font-medium hover:bg-stone-700 transition-colors shadow-sm italic font-serif">
-            ابدأ الآن
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setMode('history')}
+              className={`p-2 rounded-full transition-colors flex items-center justify-center ${mode === 'history' ? 'bg-[#8B7E66]/10 text-[#8B7E66]' : 'text-stone-500 hover:bg-stone-100'}`}
+              title="سجل المحفوظات"
+            >
+              <Clock className="w-5 h-5" />
+            </button>
+            <button className="bg-stone-800 text-stone-50 px-5 py-2 rounded-full text-sm font-medium hover:bg-stone-700 transition-colors shadow-sm italic font-serif hidden sm:block">
+              ابدأ الآن
+            </button>
+          </div>
         </div>
       </header>
 
@@ -74,6 +111,7 @@ export default function App() {
           {mode === 'pptdesign' && <PresentationDesign />}
           {mode === 'slidereview' && <SlideReview />}
           {mode === 'structure' && <StructureGuide />}
+          {mode === 'history' && <HistoryView />}
         </AnimatePresence>
       </main>
 
@@ -90,6 +128,64 @@ export default function App() {
 }
 
 // --- Home Component ---
+export async function copyToClipboard(text: string) {
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+    throw new Error('Clipboard API not available');
+  } catch (err) {
+    // Fallback for iframe environments
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      
+      // Avoid scrolling to bottom
+      textArea.style.top = "0";
+      textArea.style.left = "0";
+      textArea.style.position = "fixed";
+      // Make it invisible
+      textArea.style.opacity = "0";
+
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return successful;
+    } catch (fallbackErr) {
+      console.error('Fallback: Oops, unable to copy', fallbackErr);
+      return false;
+    }
+  }
+}
+
+function CopyButton({ text, className }: { text: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    const success = await copyToClipboard(text);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      alert("عذراً، تعذر نسخ النص. الرجاء التحديد والنسخ يدوياً.");
+    }
+  };
+
+  return (
+    <button 
+      onClick={handleCopy}
+      className={className || `absolute top-4 left-4 px-3 py-2 bg-white border ${copied ? 'border-green-200 text-green-600' : 'border-stone-200 text-stone-500'} rounded-lg shadow-sm hover:bg-stone-50 transition-colors flex items-center gap-2 text-sm font-medium z-10`}
+      title="نسخ النص"
+    >
+      <ClipboardCheck className="w-4 h-4" /> {copied ? 'تم!' : 'نسخ'}
+    </button>
+  );
+}
+
 function Home({ onSetMode }: { onSetMode: (m: AppMode) => void }) {
   return (
     <motion.div 
@@ -182,14 +278,22 @@ function Home({ onSetMode }: { onSetMode: (m: AppMode) => void }) {
 // --- Academic Writer Component ---
 function AcademicWriter() {
   const [input, setInput] = useState('');
+  const [focus, setFocus] = useState('');
   const [output, setOutput] = useState('');
+  const [language, setLanguage] = useState<'ar' | 'en'>('ar');
   const [loading, setLoading] = useState(false);
 
   const handleProcess = async () => {
     if (!input.trim()) return;
     setLoading(true);
-    const result = await rephraseToAcademic(input);
+    const result = await rephraseToAcademic(input, language, focus);
     setOutput(result);
+    saveToHistory({
+      tool: 'المصيغ الأكاديمي',
+      title: 'صياغة أكاديمية',
+      inputPayload: { input, focus, language: language === 'ar' ? 'العربية' : 'الإنجليزية' },
+      outputResult: result
+    });
     setLoading(false);
   };
 
@@ -214,14 +318,35 @@ function AcademicWriter() {
           <label className="text-xs font-bold uppercase tracking-wider text-stone-500 flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-stone-400"></span> النص الأصلي (المسودة)
           </label>
-          <div className="flex-1 bg-white border border-stone-200 rounded-3xl p-6 shadow-sm flex flex-col h-96">
+          <div className="flex-1 bg-white border border-stone-200 rounded-3xl p-6 shadow-sm flex flex-col min-h-[24rem]">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="اكتب هنا ما تريد صياغته بشكل احترافي..."
-              className="flex-1 w-full resize-none focus:outline-none text-stone-700 leading-relaxed placeholder-stone-300 font-sans"
+              className="flex-1 w-full resize-none focus:outline-none text-stone-700 leading-relaxed placeholder-stone-300 font-sans mb-4 min-h-[150px]"
             />
-            <div className="pt-4 border-t border-stone-100 flex justify-end">
+            <input
+              type="text"
+              value={focus}
+              onChange={(e) => setFocus(e.target.value)}
+              placeholder="جزء معين للتركيز عليه أو تلخيصه (اختياري)"
+              className="w-full px-4 py-3 mb-4 bg-stone-50 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#8B7E66]/20 text-sm focus:border-[#8B7E66] transition-all text-stone-700"
+            />
+            <div className="pt-4 border-t border-stone-100 flex justify-between items-center mt-auto">
+              <div className="flex bg-stone-100 rounded-full p-1 cursor-pointer">
+                <button
+                  onClick={() => setLanguage('ar')}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-full transition-all ${language === 'ar' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+                >
+                  عربي
+                </button>
+                <button
+                  onClick={() => setLanguage('en')}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-full transition-all ${language === 'en' ? 'bg-white text-stone-800 shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+                >
+                  English
+                </button>
+              </div>
               <button 
                 onClick={handleProcess}
                 disabled={loading || !input}
@@ -252,13 +377,7 @@ function AcademicWriter() {
               </div>
             )}
             {output && (
-              <button 
-                onClick={() => navigator.clipboard.writeText(output)}
-                className="absolute top-4 left-4 p-2.5 bg-white border border-stone-200 text-stone-500 rounded-lg shadow-sm hover:bg-stone-50 transition-colors"
-                title="نسخ النص"
-              >
-                <ClipboardCheck className="w-4 h-4" />
-              </button>
+              <CopyButton text={output} />
             )}
           </div>
           <div className="p-4 bg-stone-800/5 border border-stone-800/10 rounded-2xl flex gap-3">
@@ -283,6 +402,12 @@ function PresentationDesign() {
     setLoading(true);
     const result = await getDesignSuggestions(topic);
     setSuggestions(result);
+    saveToHistory({
+      tool: 'تصميم العروض',
+      title: 'اقتراحات تصميم العروض التقديمية',
+      inputPayload: { topic },
+      outputResult: result
+    });
     setLoading(false);
   };
 
@@ -323,11 +448,14 @@ function PresentationDesign() {
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-8 p-8 bg-stone-50 rounded-2xl border border-stone-200 whitespace-pre-wrap text-sm leading-relaxed font-sans text-stone-700"
+            className="mt-8 relative p-8 bg-stone-50 rounded-2xl border border-stone-200 whitespace-pre-wrap text-sm leading-relaxed font-sans text-stone-700"
           >
             <div className="flex justify-between items-center mb-4">
               <span className="text-xs font-mono font-bold text-stone-500 tracking-widest uppercase">AI Suggested Design System</span>
-              <button onClick={() => setSuggestions('')} className="text-xs text-stone-400 hover:text-stone-800 transition-colors">مسح</button>
+              <div className="flex items-center gap-2">
+                <CopyButton text={suggestions} className="px-3 py-1.5 bg-white border border-stone-200 text-stone-500 rounded-lg shadow-sm hover:bg-stone-50 transition-colors flex items-center gap-2 text-xs font-medium" />
+                <button onClick={() => setSuggestions('')} className="text-xs text-stone-400 hover:text-stone-800 transition-colors">مسح</button>
+              </div>
             </div>
             {suggestions}
           </motion.div>
@@ -481,6 +609,12 @@ function SlideReview() {
     setLoading(true);
     const result = await analyzeSlide(imagePreview, mimeType);
     setOutput(result);
+    saveToHistory({
+      tool: 'تقييم الشرائح',
+      title: 'تحليل الشريحة بالذكاء الاصطناعي',
+      inputPayload: { note: "تم تحليل صورة شريحة مرفقة." },
+      outputResult: result
+    });
     setLoading(false);
   };
 
@@ -551,8 +685,9 @@ function SlideReview() {
           </label>
           <div className="w-full bg-white border border-stone-200 rounded-3xl shadow-sm relative overflow-hidden font-sans text-sm leading-relaxed text-stone-700 min-h-[400px] flex flex-col">
              {output ? (
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 p-8 overflow-y-auto whitespace-pre-wrap flex-1">
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 p-8 overflow-y-auto whitespace-pre-wrap flex-1 relative">
                 {output}
+                <CopyButton text={output} />
               </div>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 gap-3">
@@ -678,6 +813,108 @@ function StructureGuide() {
           </div>
         ))}
       </div>
+    </motion.div>
+  );
+}
+
+// --- History View Component ---
+function HistoryView() {
+  const [history, setHistory] = useState<HistoryItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('gradmaster_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const clearHistory = () => {
+    if (window.confirm("هل أنت متأكد من مسح السجل بالكامل؟")) {
+      localStorage.removeItem('gradmaster_history');
+      setHistory([]);
+    }
+  };
+
+  const deleteItem = (id: string) => {
+    const newHistory = history.filter(item => item.id !== id);
+    localStorage.setItem('gradmaster_history', JSON.stringify(newHistory));
+    setHistory(newHistory);
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="space-y-8"
+    >
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-stone-200 pb-6">
+        <div>
+          <h2 className="text-3xl font-serif font-bold text-stone-900">سجل المحفوظات</h2>
+          <p className="text-stone-500 mt-1">النتائج والمتطلبات السابقة التي قمت بمعالجتها</p>
+        </div>
+        {history.length > 0 && (
+          <button 
+            onClick={clearHistory}
+            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+          >
+            <Trash2 className="w-4 h-4" /> مسح السجل
+          </button>
+        )}
+      </div>
+
+      {history.length === 0 ? (
+        <div className="bg-white border border-stone-200 rounded-3xl p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
+          <Clock className="w-12 h-12 text-stone-300 mb-4" />
+          <p className="text-stone-500 font-medium text-lg">السجل فارغ</p>
+          <p className="text-stone-400 text-sm mt-2 max-w-sm">سيتم حفظ جميع العمليات التي تقوم بها هنا لتمكينك من الرجوع إليها لاحقاً.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {history.map((item) => (
+            <div key={item.id} className="bg-white border border-stone-200 rounded-3xl p-6 md:p-8 shadow-sm flex flex-col gap-4">
+              <div className="flex justify-between items-start border-b border-stone-100 pb-4">
+                <div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="px-3 py-1 bg-[#8B7E66]/10 text-[#8B7E66] text-xs font-bold rounded-full uppercase tracking-wider">{item.tool}</span>
+                    <span className="text-sm font-medium text-stone-900">{item.title}</span>
+                  </div>
+                  <div className="text-xs text-stone-400 mt-2 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {new Date(item.date).toLocaleString('ar-SA')}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <CopyButton text={item.outputResult} className="px-3 py-2 bg-stone-50 border border-stone-200 text-stone-500 rounded-lg hover:bg-stone-100 transition-colors flex items-center gap-2 text-xs font-medium" />
+                  <button 
+                    onClick={() => deleteItem(item.id)}
+                    className="p-2 text-stone-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              
+              <div className="grid md:grid-cols-2 gap-6 pt-2">
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">المدخلات (المتطلبات)</span>
+                  <div className="text-sm text-stone-600 bg-stone-50 p-4 rounded-xl font-sans whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+                    {item.inputPayload?.input && <p className="mb-2"><strong>النص:</strong> {item.inputPayload.input}</p>}
+                    {item.inputPayload?.focus && <p className="mb-2"><strong>التركيز:</strong> {item.inputPayload.focus}</p>}
+                    {item.inputPayload?.topic && <p className="mb-2"><strong>الموضوع:</strong> {item.inputPayload.topic}</p>}
+                    {item.inputPayload?.note && <p className="mb-2"><strong>ملاحظة:</strong> {item.inputPayload.note}</p>}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-stone-400 uppercase tracking-widest">المخرجات (النتائج)</span>
+                  <div className="text-sm text-stone-800 bg-[#EFEBE6]/30 p-4 rounded-xl border border-stone-100 font-sans whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto w-full max-w-full">
+                    {item.outputResult}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </motion.div>
   );
 }
