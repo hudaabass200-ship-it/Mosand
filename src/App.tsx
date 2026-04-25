@@ -69,11 +69,11 @@ export default function App() {
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         <AnimatePresence mode="wait">
-          {mode === 'home' && <Home key="home" onSetMode={setMode} />}
-          {mode === 'writer' && <AcademicWriter key="writer" />}
-          {mode === 'pptdesign' && <PresentationDesign key="ppt" />}
-          {mode === 'slidereview' && <SlideReview key="slidereview" />}
-          {mode === 'structure' && <StructureGuide key="structure" />}
+          {mode === 'home' && <Home onSetMode={setMode} />}
+          {mode === 'writer' && <AcademicWriter />}
+          {mode === 'pptdesign' && <PresentationDesign />}
+          {mode === 'slidereview' && <SlideReview />}
+          {mode === 'structure' && <StructureGuide />}
         </AnimatePresence>
       </main>
 
@@ -426,7 +426,7 @@ function SlideReview() {
   const [output, setOutput] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: any) => {
     const file = e.target.files?.[0];
     if (!file) return;
 

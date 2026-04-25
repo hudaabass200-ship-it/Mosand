@@ -1,17 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 
 const getApiKey = () => {
-  // Try to get from process.env, or import.meta.env if using Vite standard vars
   let key = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
-  
   if (typeof key === 'string') {
     key = key.trim().replace(/^["']|["']$/g, '');
-    // Remove any non-ASCII characters to prevent Header append errors
     key = key.replace(/[^\x00-\x7F]/g, "");
-  }
-  
-  if (key === "undefined" || key === '""' || !key) {
-    return "";
   }
   return key;
 };
@@ -22,10 +15,10 @@ if (!apiKey) {
   console.error("GEMINI_API_KEY is not defined in the environment variables.");
 }
 
-const ai = new GoogleGenAI({ apiKey: apiKey });
+const ai = apiKey ? new GoogleGenAI({ apiKey: apiKey }) : null as any;
 
 export async function rephraseToAcademic(text: string): Promise<string> {
-  if (!apiKey) return "خطأ: مفتاح GEMINI_API_KEY غير متوفر. إذا قمت برفع التطبيق على Vercel، يرجى إضافة هذا المفتاح في إعدادات (Environment Variables).";
+  if (!ai) return "خطأ: مفتاح GEMINI_API_KEY غير متوفر. يرجى التحقق من إعدادات المفتاح.";
   if (!text.trim()) return "";
 
   try {
@@ -39,12 +32,16 @@ export async function rephraseToAcademic(text: string): Promise<string> {
     return response.text || "Failed to generate academic version.";
   } catch (error: any) {
     console.error("Error rephrasing text:", error);
+    // If the error contains API_KEY_INVALID, give a clear message
+    if (error?.message?.includes('API_KEY_INVALID') || JSON.stringify(error).includes('API_KEY_INVALID')) {
+       return `خطأ: مفتاح API غير صالح. يرجى التأكد من نسخ المفتاح بشكل صحيح بدون مسافات إضافية.`;
+    }
     return `خطأ: تعذر الاتصال بالمساعد الذكي. تفاصيل: ${error.message || 'يرجى المحاولة مرة أخرى لاحقاً.'}`;
   }
 }
 
 export async function getDesignSuggestions(topic: string): Promise<string> {
-  if (!apiKey) return "خطأ: مفتاح GEMINI_API_KEY غير متوفر. إذا قمت برفع التطبيق على Vercel، يرجى إضافة هذا المفتاح في إعدادات (Environment Variables).";
+  if (!ai) return "خطأ: مفتاح GEMINI_API_KEY غير متوفر. يرجى التحقق من إعدادات المفتاح.";
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -59,14 +56,16 @@ export async function getDesignSuggestions(topic: string): Promise<string> {
     return response.text || "Failed to generate design suggestions.";
   } catch (error: any) {
     console.error("Error getting design suggestions:", error);
+    if (error?.message?.includes('API_KEY_INVALID') || JSON.stringify(error).includes('API_KEY_INVALID')) {
+       return `خطأ: مفتاح API غير صالح. يرجى التأكد من نسخ المفتاح بشكل صحيح بدون مسافات إضافية.`;
+    }
     return `خطأ في جلب الاقتراحات: ${error.message || 'يرجى المحاولة مرة أخرى'}`;
   }
 }
 
 export async function analyzeSlide(base64Data: string, mimeType: string): Promise<string> {
-  if (!apiKey) return "خطأ: مفتاح GEMINI_API_KEY غير متوفر. إذا قمت برفع التطبيق على Vercel، يرجى إضافة هذا المفتاح في إعدادات (Environment Variables).";
+  if (!ai) return "خطأ: مفتاح GEMINI_API_KEY غير متوفر. يرجى التحقق من إعدادات المفتاح.";
   try {
-    // Remove data URL prefix if present (e.g. data:image/png;base64,)
     const cleanBase64 = base64Data.split(',')[1] || base64Data;
     
     const response = await ai.models.generateContent({
@@ -95,6 +94,9 @@ export async function analyzeSlide(base64Data: string, mimeType: string): Promis
     return response.text || "لم أتمكن من تحليل الشريحة.";
   } catch (error: any) {
     console.error("Error analyzing slide:", error);
+    if (error?.message?.includes('API_KEY_INVALID') || JSON.stringify(error).includes('API_KEY_INVALID')) {
+       return `خطأ: مفتاح API غير صالح. يرجى التأكد من نسخ المفتاح بشكل صحيح بدون مسافات إضافية من موقع Google AI Studio.`;
+    }
     return `حدث خطأ أثناء محاولة تحليل الشريحة. تفاصيل: ${error.message || 'يرجى المحاولة مرة أخرى'}.`;
   }
 }
