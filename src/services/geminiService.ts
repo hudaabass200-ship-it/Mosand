@@ -2,7 +2,18 @@ import { GoogleGenAI } from "@google/genai";
 
 const getApiKey = () => {
   // Try to get from process.env, or import.meta.env if using Vite standard vars
-  return process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
+  let key = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY || "";
+  
+  if (typeof key === 'string') {
+    key = key.trim().replace(/^["']|["']$/g, '');
+    // Remove any non-ASCII characters to prevent Header append errors
+    key = key.replace(/[^\x00-\x7F]/g, "");
+  }
+  
+  if (key === "undefined" || key === '""' || !key) {
+    return "";
+  }
+  return key;
 };
 
 const apiKey = getApiKey();
