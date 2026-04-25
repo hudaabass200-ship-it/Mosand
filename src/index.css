@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", "Playfair Display", serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-primary: #1c1917; /* stone-900 */
+  --color-secondary: #57534e; /* stone-600 */
+  --color-accent: #8B7E66; /* Natural brown/gold */
+  --color-academic-gold: #D4CFC7;
+}
+
+@layer base {
+  body {
+    @apply font-sans bg-[#F7F5F2] text-stone-800;
+  }
+}
+
+.academic-card {
+  @apply bg-white border border-stone-200 rounded-3xl shadow-sm hover:shadow-md transition-shadow duration-300;
+}
+
+.gradient-text {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent;
+}
+
